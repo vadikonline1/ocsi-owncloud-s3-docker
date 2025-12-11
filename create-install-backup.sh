@@ -3,9 +3,6 @@ set -e
 
 INSTALL_SCRIPT="/usr/local/bin/install-ocis-backup.sh"
 
-# -----------------------------
-# 1️⃣ Creare install script
-# -----------------------------
 echo "📌 Creare $INSTALL_SCRIPT ..."
 
 cat > "$INSTALL_SCRIPT" <<'EOL'
@@ -13,11 +10,8 @@ cat > "$INSTALL_SCRIPT" <<'EOL'
 set -e
 
 BACKUP_SCRIPT="/usr/local/bin/ocis-backup.sh"
-CRON_JOB="0 3 * * * $BACKUP_SCRIPT >> /var/log/ocis-backup.log 2>&1"
+CRON_JOB="0 3 * * * /usr/local/bin/ocis-backup.sh >> /var/log/ocis-backup.log 2>&1"
 
-# -----------------------------
-# 1️⃣ Creare backup script dacă nu există
-# -----------------------------
 if [ ! -f "$BACKUP_SCRIPT" ]; then
   echo "📌 Creare $BACKUP_SCRIPT ..."
   cat > "$BACKUP_SCRIPT" <<'BACKUP_EOF'
@@ -31,14 +25,12 @@ BACKUP_FILE="$BACKUP_TMP/ocis-backup-$TIMESTAMP.tar.gz"
 ENV_FILE="$OCIS_DIR/.env"
 RCLONE_REMOTE="ocisbackup"
 
-# Citire variabile S3 din .env
-export $(grep -v '^#' "$ENV_FILE" | xargs)
-
-S3_BUCKET="$STORAGE_USERS_S3NG_BUCKET"
-S3_ACCESS_KEY="$STORAGE_USERS_S3NG_ACCESS_KEY"
-S3_SECRET_KEY="$STORAGE_USERS_S3NG_SECRET_KEY"
-S3_ENDPOINT="$STORAGE_USERS_S3NG_ENDPOINT"
-S3_REGION="$STORAGE_USERS_S3NG_REGION"
+# Citire AWS key/secret/endpoint din .env
+AWS_ACCESS_KEY=$(grep AWS_ACCESS_KEY_ID "$ENV_FILE" | cut -d '=' -f2 | tr -d '"')
+AWS_SECRET_KEY=$(grep AWS_SECRET_ACCESS_KEY "$ENV_FILE" | cut -d '=' -f2 | tr -d '"')
+S3_BUCKET="owncloud"
+S3_ENDPOINT="https://md1-s3.datahub.md"
+S3_REGION="eu-central-1"
 
 # Instalare rclone dacă lipsește
 if ! command -v rclone &> /dev/null; then
@@ -54,8 +46,8 @@ if ! rclone listremotes | grep -q "^$RCLONE_REMOTE:"; then
 type = s3
 provider = Other
 env_auth = false
-access_key_id = $S3_ACCESS_KEY
-secret_access_key = $S3_SECRET_KEY
+access_key_id = $AWS_ACCESS_KEY
+secret_access_key = $AWS_SECRET_KEY
 endpoint = $S3_ENDPOINT
 region = $S3_REGION
 acl = private
@@ -70,6 +62,18 @@ rclone copy "$BACKUP_FILE" "$RCLONE_REMOTE:$S3_BUCKET/" --progress || echo "⚠�
 docker start ocis || true
 
 echo "✅ Backup finalizat: $BACKUP_FILE"
+
+# Păstrăm doar ultimele 2 backup-uri
+BACKUPS_LIST=$(rclone lsf "$RCLONE_REMOTE:$S3_BUCKET/" --files-only | grep '^ocis-backup-' | sort -r)
+BACKUPS_COUNT=$(echo "$BACKUPS_LIST" | wc -l)
+
+if [ "$BACKUPS_COUNT" -gt 2 ]; then
+  TO_DELETE=$(echo "$BACKUPS_LIST" | tail -n +3)
+  for f in $TO_DELETE; do
+    echo "🗑️ Ștergere backup vechi: $f"
+    rclone delete "$RCLONE_REMOTE:$S3_BUCKET/$f"
+  done
+fi
 BACKUP_EOF
 
   chmod +x "$BACKUP_SCRIPT"
@@ -78,19 +82,14 @@ else
   echo "ℹ️ Scriptul $BACKUP_SCRIPT există deja, nu se suprascrie."
 fi
 
-# -----------------------------
-# 2️⃣ Adaugare job cron dacă nu există
-# -----------------------------
-# Extrage crontab existent, evită duplicarea
+# Adăugare job CRON dacă nu există
 (crontab -l 2>/dev/null | grep -v -F "$BACKUP_SCRIPT"; echo "$CRON_JOB") | crontab -
 echo "⏰ Job CRON adăugat pentru rulare zilnică la 03:00."
 EOL
 
-# -----------------------------
-# 2️⃣ Fă-l executabil
-# -----------------------------
 chmod +x "$INSTALL_SCRIPT"
 echo "✅ Install script creat și executabil: $INSTALL_SCRIPT"
-echo "Poți rula acum: sudo $INSTALL_SCRIPT"
 
-/usr/local/bin/install-ocis-backup.sh
+sudo /usr/local/bin/install-ocis-backup.sh
+
+
