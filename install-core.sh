@@ -4,7 +4,7 @@ set -e
 # -----------------------------
 # 1️⃣ Configurare variabile
 # -----------------------------
-OCIS_IP=$(hostname -I | awk '{print $1}'):9200
+# OCIS_DOMAIN=cloud.site.com or $(hostname -I | awk '{print $1}'):9200
 OCIS_DOMAIN=cloud.site.com
 # Amazon S3 (driver s3ng)
 STORAGE_USERS_DRIVER="s3ng"
@@ -59,8 +59,25 @@ sudo chmod -R 770 /opt/ocis
 # -----------------------------
 echo "Creare .env..."
 cat > .env <<EOL
-OCIS_IP=${OCIS_IP}
+# OCIS Config
 OCIS_DOMAIN=${OCIS_DOMAIN}
+OCIS_URL="https://\${OCIS_DOMAIN}" #change OCIS_IP with OCIS_DOMAIN if have domain name
+IDP_ISSUER="https://\${OCIS_DOMAIN}"  #change OCIS_IP with OCIS_DOMAIN if have domain name
+PROXY_HTTP_ADDR="0.0.0.0:9200"
+PROXY_TLS="false"
+OCIS_INSECURE="true"
+OCIS_LOG_LEVEL=info
+GRAPH_SPACES_DEFAULT_QUOTA=0 #unlimited
+LOG_PATH=/var/lib/ocis
+ACTIVITYLOG_LOG_LEVEL=${OCIS_LOG_LEVEL}
+ACTIVITYLOG_LOG_FILE=${LOG_PATH}/activitylog.log
+CLIENTLOG_LOG_LEVEL=${OCIS_LOG_LEVEL}
+CLIENTLOG_LOG_FILE=${LOG_PATH}/clientlog.log
+EVENTHISTORY_LOG_LEVEL=${OCIS_LOG_LEVEL}
+EVENTHISTORY_LOG_FILE=${LOG_PATH}/eventhistory.log
+
+
+# Amazon S3 (driver s3ng)
 STORAGE_USERS_DRIVER=${STORAGE_USERS_DRIVER}
 STORAGE_USERS_S3NG_BUCKET=${STORAGE_USERS_S3NG_BUCKET}
 STORAGE_USERS_S3NG_REGION=${STORAGE_USERS_S3NG_REGION}
@@ -70,6 +87,8 @@ STORAGE_USERS_S3NG_ENDPOINT=${STORAGE_USERS_S3NG_ENDPOINT}
 STORAGE_USERS_S3NG_PROPAGATOR=${STORAGE_USERS_S3NG_PROPAGATOR}
 STORAGE_USERS_S3NG_PUT_OBJECT_DISABLE_MULTIPART=${STORAGE_USERS_S3NG_PUT_OBJECT_DISABLE_MULTIPART}
 STORAGE_USERS_S3NG_PUT_OBJECT_NUM_THREADS=${STORAGE_USERS_S3NG_PUT_OBJECT_NUM_THREADS}
+
+# SMTP Config
 SMTP_HOST=${SMTP_HOST}
 SMTP_PORT=${SMTP_PORT}
 SMTP_SENDER=${SMTP_SENDER}
@@ -91,13 +110,6 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      OCIS_INSECURE: "true"
-      OCIS_URL: "https://\${OCIS_IP}" #change OCIS_IP with OCIS_DOMAIN if have domain name
-      OCIS_LOG_LEVEL: info
-      PROXY_HTTP_ADDR: "0.0.0.0:9200"
-      PROXY_TLS: "false"
-      IDP_ISSUER: "https://\${OCIS_IP}"  #change OCIS_IP with OCIS_DOMAIN if have domain name
     ports:
       - "9200:9200"
     volumes:
