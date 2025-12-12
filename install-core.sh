@@ -4,8 +4,8 @@ set -e
 # -----------------------------
 # 1️⃣ Configurare variabile
 # -----------------------------
-OCIS_DOMAIN=$(hostname -I | awk '{print $1}')
-
+OCIS_IP=$(hostname -I | awk '{print $1}'):9200
+OCIS_DOMAIN=cloud.site.com
 # Amazon S3 (driver s3ng)
 STORAGE_USERS_DRIVER="s3ng"
 STORAGE_USERS_S3NG_BUCKET="owncloud"
@@ -59,6 +59,7 @@ sudo chmod -R 770 /opt/ocis
 # -----------------------------
 echo "Creare .env..."
 cat > .env <<EOL
+OCIS_IP=${OCIS_IP}
 OCIS_DOMAIN=${OCIS_DOMAIN}
 STORAGE_USERS_DRIVER=${STORAGE_USERS_DRIVER}
 STORAGE_USERS_S3NG_BUCKET=${STORAGE_USERS_S3NG_BUCKET}
@@ -92,11 +93,11 @@ services:
       - .env
     environment:
       OCIS_INSECURE: "true"
-      OCIS_URL: "https://\${OCIS_DOMAIN}:9200"
+      OCIS_URL: "https://\${OCIS_IP}" #change OCIS_IP with OCIS_DOMAIN if have domain name
       OCIS_LOG_LEVEL: info
       PROXY_HTTP_ADDR: "0.0.0.0:9200"
-      PROXY_TLS: "true"
-      IDP_ISSUER: "https://\${OCIS_DOMAIN}:9200"
+      PROXY_TLS: "false"
+      IDP_ISSUER: "https://\${OCIS_IP}"  #change OCIS_IP with OCIS_DOMAIN if have domain name
     ports:
       - "9200:9200"
     volumes:
